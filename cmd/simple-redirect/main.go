@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	version "github.com/jnovack/release"
@@ -36,23 +37,10 @@ var (
 func redirect(w http.ResponseWriter, req *http.Request) {
 
 	if req.TLS == nil {
-		metrics.HTTPRedirects++
+		atomic.AddInt64(&metrics.HTTPRedirects, 1)
 	} else {
-		metrics.HTTPSRedirects++
+		atomic.AddInt64(&metrics.HTTPSRedirects, 1)
 	}
-
-	// TODO Optionally add Path
-	if req.URL.Path != "/" {
-		*target += req.URL.Path
-	}
-
-	// TODO Optionally add Query
-	if len(req.URL.RawQuery) > 0 {
-		*target += "?" + req.URL.RawQuery
-	}
-
-	// TODO Log
-	// log.Printf("redirect to: %s", target)
 
 	http.Redirect(w, req, *target,
 		// 301 - Permanently Moved http.StatusMovedPermanently
@@ -71,8 +59,8 @@ func main() {
 	status := http.StatusFound
 
 	// Set metrics
-	metrics.Target = target
-	metrics.Status = status
+	metrics.Target = *target
+	metrics.Status = *status
 
 	// Serve HTTP redirects
 	log.Info().Msg("Serving redirects on :" + strconv.FormatInt(int64(httpPort), 10))
