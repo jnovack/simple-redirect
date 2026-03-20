@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/tls"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -42,21 +44,42 @@ func redirect(w http.ResponseWriter, req *http.Request) {
 		atomic.AddInt64(&metrics.HTTPSRedirects, 1)
 	}
 
-	http.Redirect(w, req, *target,
+	destination, err := buildRedirectURL(*target, req)
+	if err != nil {
+		log.Error().Err(err).Str("target", *target).Msg("invalid redirect target")
+		http.Error(w, "invalid redirect target", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, req, destination,
 		// 301 - Permanently Moved http.StatusMovedPermanently
 		// 302 - Temporarily Moved http.StatusFound
 		*status)
 
 }
 
+func buildRedirectURL(baseTarget string, req *http.Request) (string, error) {
+	destination, err := url.Parse(baseTarget)
+	if err != nil {
+		return "", err
+	}
+
+	if req.URL.Path != "/" {
+		basePath := strings.TrimRight(destination.Path, "/")
+		requestPath := strings.TrimLeft(req.URL.Path, "/")
+		if basePath == "" {
+			destination.Path = "/" + requestPath
+		} else {
+			destination.Path = basePath + "/" + requestPath
+		}
+	}
+
+	destination.RawQuery = req.URL.RawQuery
+	return destination.String(), nil
+}
+
 func main() {
 	flag.Parse()
-
-	// TODO Optionally set Target
-	target := "https://www.google.com"
-
-	// TODO Optionally set Status
-	status := http.StatusFound
 
 	// Set metrics
 	metrics.Target = *target
