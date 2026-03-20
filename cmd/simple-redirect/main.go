@@ -9,6 +9,7 @@ import (
 
 	version "github.com/jnovack/release"
 	metrics "github.com/jnovack/simple-redirect/internal/metrics"
+	"github.com/jnovack/simple-redirect/pkg/apachelog"
 
 	"github.com/jnovack/flag"
 
@@ -77,8 +78,9 @@ func main() {
 	log.Info().Msg("Serving redirects on :" + strconv.FormatInt(int64(httpPort), 10))
 	httpMux := http.NewServeMux()
 	httpMux.HandleFunc("/", redirect)
+	httpHandler := apachelog.NewApacheLoggingHandler(httpMux, os.Stdout)
 	go func() {
-		log.Fatal().Err(http.ListenAndServe(":"+strconv.FormatInt(int64(httpPort), 10), httpMux)).Msg("Error with http.ListenAndServe()")
+		log.Fatal().Err(http.ListenAndServe(":"+strconv.FormatInt(int64(httpPort), 10), httpHandler)).Msg("Error with http.ListenAndServe()")
 	}()
 
 	// Serve HTTPS redirects
@@ -90,6 +92,7 @@ func main() {
 		}
 		httpsMux := http.NewServeMux()
 		httpsMux.HandleFunc("/", redirect)
+		httpsHandler := apachelog.NewApacheLoggingHandler(httpsMux, os.Stdout)
 
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS12,
@@ -109,7 +112,7 @@ func main() {
 
 		https := &http.Server{
 			Addr:         ":" + strconv.FormatInt(int64(httpsPort), 10),
-			Handler:      httpsMux,
+			Handler:      httpsHandler,
 			TLSConfig:    cfg,
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		}
